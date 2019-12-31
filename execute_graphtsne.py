@@ -18,8 +18,8 @@ import datetime
 input_dir = 'data'
 output_dir = 'results'
 # dataset_name = 'cora'
-dataset_name = 'citeseer'
-# dataset_name = 'pubmed'
+# dataset_name = 'citeseer'
+dataset_name = 'pubmed'
 
 # Here we set the graph clustering weight (alpha) at 0.4, as in the paper
 opt_parameters = {'graph_weight': 0.4}

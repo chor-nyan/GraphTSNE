@@ -5,7 +5,7 @@ from matplotlib import collections  as mc
 import matplotlib.pyplot as plt
 
 
-def plot_graph_embedding(y_emb, labels, adj, line_alpha=0.2, s=7, title=""):
+def plot_graph_embedding(y_emb, labels, adj, line_alpha=0.05, s=1, title=""):
     """
     Plots the visualization of graph-structured data
     Args:
