@@ -48,11 +48,11 @@ class GraphConvNet(nn.Module):
         self.gnn_cells = nn.ModuleList(list_of_gnn_cells)
 
         # fc
-        Hfinal = net_layers_extended[-1]
-        self.fc = nn.Linear(Hfinal, n_components)
+        # Hfinal = net_layers_extended[-1]
+        # self.fc = nn.Linear(Hfinal, n_components)
 
         # init
-        self.init_weights_Graph_OurConvNet(Hfinal, n_components, 1)
+        # self.init_weights_Graph_OurConvNet(Hfinal, n_components, 1)
 
         # print('\nnb of hidden layers=', L)
         # print('dim of layers (w/ embed dim)=', net_layers_extended)
@@ -68,9 +68,12 @@ class GraphConvNet(nn.Module):
         self.fc.weight.data.uniform_(-scale, scale)
         self.fc.bias.data.fill_(0)
 
-    def forward(self, G):
-        # Data matrix
-        x = G.inputs
+    def forward(self, G, feature=None):
+        if feature is not None:
+            x = feature
+        else:
+            # Data matrix
+            x = G.inputs
 
         # Unroll into single vector
         x = x.view(x.shape[0], -1)
@@ -93,8 +96,8 @@ class GraphConvNet(nn.Module):
             gnn_layer = self.gnn_cells[layer]
             x = gnn_layer(x, E_start, E_end)  # V x Hfinal
 
-        # FC
-        x = self.fc(x)
+        # # FC
+        # x = self.fc(x)
 
         return x
 

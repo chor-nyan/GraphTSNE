@@ -46,9 +46,10 @@ def _get_net_projection(net, G, sampling=False, dataset=None):
 
     if not sampling:
         if torch.cuda.is_available():
-            return net.forward(G).cpu().detach().numpy()
+            return net.forward(G)[0].cpu().detach().numpy()  # [0]を追加
+
         else:
-            return net.forward(G).detach().numpy()
+            return net.forward(G)[0].detach().numpy()  # [0]を追加
 
     is_sorted = lambda a: np.all(a[:-1] <= a[1:])
     assert is_sorted(G.original_indices)

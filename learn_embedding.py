@@ -2,17 +2,20 @@ import os
 import time
 import torch
 from math import ceil
+import numpy as np
 
+from core.umap_torch_loss import umap_torch_loss, calculate_ab
 from core.tsne_torch_loss import compute_joint_probabilities, tsne_torch_loss
 from util.network_utils import get_net_projection, save_checkpoint
 from util.evaluation_metrics import evaluate_viz_metrics
 from util.training_utils import get_torch_dtype
+import torch.nn as nn
 
 
 dtypeFloat, dtypeLong = get_torch_dtype()
 
 
-def train(net, train_set, opt_parameters, checkpoint_dir, val_set=None):
+def train(net, train_set, opt_parameters, checkpoint_dir, val_set=None, min_dist=0.1):
     # Optimization parameters
     n_batches = opt_parameters['n_batches']
     shuffle_flag = opt_parameters['shuffle_flag']
@@ -42,6 +45,11 @@ def train(net, train_set, opt_parameters, checkpoint_dir, val_set=None):
     running_total = 0
     tab_results = []
 
+    # feature_weight = graph_weight * 3/2
+
+    a, b = calculate_ab(min_dist)
+    a, b = np.array(a), np.array(b)
+    a, b = torch.from_numpy(a).type(dtypeFloat), torch.from_numpy(b).type(dtypeFloat)
     all_features_P_initialised = False
     print("Start training...")
 
@@ -57,7 +65,7 @@ def train(net, train_set, opt_parameters, checkpoint_dir, val_set=None):
             for G in train_set.all_data:
                 X = G.inputs.view(G.inputs.shape[0], -1).numpy()
                 if graph_weight != 1.0:
-                    P = compute_joint_probabilities(X, perplexity=perplexity, metric=metric, method='approx', adj=G.adj_matrix)
+                    P = compute_joint_probabilities(X, perplexity=perplexity, metric=metric, method='exact', adj=G.adj_matrix)
                     all_features_P.append(P)
 
                 if graph_weight != 0.0:
@@ -69,24 +77,40 @@ def train(net, train_set, opt_parameters, checkpoint_dir, val_set=None):
         # Forward pass through all training data
         for i, G in enumerate(train_set.all_data):
 
-            y_pred = net.forward(G)
+            y_pred, ret = net.forward(G)
 
             feature_loss = torch.tensor([0]).type(dtypeFloat)
             graph_loss = torch.tensor([0]).type(dtypeFloat)
+            DGI_loss = torch.tensor([0]).type(dtypeFloat)
 
             if graph_weight != 1.0:
                 feature_loss = tsne_torch_loss(all_features_P[i], y_pred)
             if graph_weight != 0.0:
                 graph_loss = tsne_torch_loss(all_graph_P[i], y_pred)
 
-            loss = (1 - graph_weight) * feature_loss + graph_weight * graph_loss
+            nb_nodes = G.inputs.shape[0]
+            lbl_1 = torch.ones(n_batches, nb_nodes)
+            lbl_2 = torch.zeros(n_batches, nb_nodes)
+            lbl = torch.cat((lbl_1, lbl_2), 1)
+
+            b_xent = nn.BCEWithLogitsLoss()
+            # print("Now", ret.shape, lbl.shape)
+            DGI_loss = b_xent(ret, lbl)
+            # print(all_graph_P)
+
+            loss = (1 - graph_weight) * feature_loss + graph_weight * graph_loss + graph_weight * DGI_loss
+            # loss = feature_loss
+            # print(loss)
             running_tsne_loss += feature_loss.item()
             running_graph_loss += graph_loss.item()
 
             running_loss += loss.item()
             running_total += 1
 
-            # Backprop
+            # Backpropss()
+            # # print("Now", ret.shape, lbl.shape)
+            # DGI_loss = b_xent(ret, lbl)
+            # # print(all_graph_P)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -113,6 +137,7 @@ def train(net, train_set, opt_parameters, checkpoint_dir, val_set=None):
             print('iteration= %d, loss(%diter)= %.8f, tsne_loss= %.8f, graph_loss= %.8f, \n'
                   'lr= %.8f, time(%diter)= %.2f' %
                   (iteration, batch_iters, average_loss, average_tsne_loss, average_graph_loss, lr, batch_iters, t_stop))
+            print("DGI_loss:", DGI_loss)
             tab_results.append([iteration, average_loss, time.time() - t_start_total])
 
             running_loss = 0.0
